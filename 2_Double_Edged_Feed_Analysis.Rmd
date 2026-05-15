@@ -1,0 +1,653 @@
+---
+title: "Effects of Social Media Users, Content, and Features on Affective Polarization and Engagement - Data Analysis"
+author: "Jean Springsteen, Dino Christenson, Will Yeoh"
+date: "Winter 2025"
+
+output: pdf_document
+---
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(readxl)
+## install.packages("cregg")
+library(cregg)
+```
+
+# Analysis
+
+## Analysis-Specific Data Cleaning
+```{r Make new variable columns}
+conjoint_data_cleaned <- read.csv("cleaned_anonymized_survey_data.csv")
+
+summary(as.factor(conjoint_data_cleaned$party_3_scale))
+summary(as.factor(conjoint_data_cleaned$ideology_3_scale))
+
+## Statistics before removing Dems/Reps
+conjoint_data_cleaned <- subset(conjoint_data_cleaned, conjoint_data_cleaned$Age >= 18)
+## summary(as.factor(conjoint_data_cleaned$attention_check))
+conjoint_data_cleaned <- subset(conjoint_data_cleaned, conjoint_data_cleaned$attention_check == 1)
+
+summary(as.factor(conjoint_data_cleaned$Party.Affiliation))
+summary(as.factor(conjoint_data_cleaned$Estimated.Ideology))
+summary(as.factor(conjoint_data_cleaned$Social.Media.Usage))
+
+## Create a binary variable reporting whether a respondent would interact with the post in some way
+conjoint_data_cleaned$interact_binary <- ifelse(conjoint_data_cleaned$moneyDV_all_response > 0, 1, 0)
+## summary(two_group_subset$interact_binary) ##58.81% of responses interacted
+
+
+## Reduce to only Democrats and Republicans
+two_group_subset <- subset(conjoint_data_cleaned,
+                             (conjoint_data_cleaned$party_3_scale!="Independent")&(conjoint_data_cleaned$ideology_3_scale!="Moderate"))
+```
+
+## Analysis-Specific Descriptive Statistics
+```{r Descriptive Statistics}
+two_group_subset <- subset(two_group_subset, two_group_subset$Age >= 18)
+num_participants <- nrow(two_group_subset)
+
+## Party Affiliation
+summary(as.factor(two_group_subset$Party.Affiliation))
+summary(as.factor(two_group_subset$party_3_scale))
+
+### The whole 5-factor party scale
+party_affiliation_tab_nums <- summary(as.factor(two_group_subset$Party.Affiliation))
+party_affiliation_tab_percents <- party_affiliation_tab_nums/num_participants
+party_affiliation_tab_percents
+
+## Ideological Leaning
+summary(as.factor(two_group_subset$Estimated.Ideology))
+summary(as.factor(two_group_subset$ideology_3_scale))
+
+## Age
+summary(as.numeric(two_group_subset$Age))
+
+## Education Level
+summary(as.factor(two_group_subset$Education))
+
+## Income
+summary(as.factor(two_group_subset$Income))
+
+## Gender Identity
+summary(as.factor(two_group_subset$Gender.Identity))
+
+## Race 
+summary(as.factor(two_group_subset$Race_white))
+
+### Turn Age Into Binned Data
+two_group_subset$age_binned <- ifelse(two_group_subset$Age <= 24, "18-24", 
+                                      ifelse(two_group_subset$Age <= 29, "25-29", 
+                                             ifelse(two_group_subset$Age <= 34, "30-34", 
+                                                    ifelse(two_group_subset$Age <= 39, "35-39", 
+                                                           ifelse(two_group_subset$Age <= 44, "40-44", 
+                                                                  ifelse(two_group_subset$Age <= 49, "45-49", 
+                                                                         ifelse(two_group_subset$Age <= 54, "50-54", 
+                                                                                ifelse(two_group_subset$Age <= 59, "55-59", 
+                                                                                       ifelse(two_group_subset$Age<=64, "60-64", 
+                                                                                              ifelse(two_group_subset$Age<=69, "65-69", 
+                                                                                                     ifelse(two_group_subset$Age<=74, "70-74", 
+                                                                                                            ifelse(two_group_subset$Age<=79, "75-79",
+                                                                                                                   ifelse(two_group_subset$Age<=84,"80-84", "85+")
+                                                                                                            ))))))))))))
+
+binned_age_vec <- summary(as.factor(two_group_subset$age_binned))
+binned_age_percents <- binned_age_vec/2398
+binned_age_percents
+
+
+### Race data into bins
+#summary(two_group_subset$Race_white)
+two_group_subset$race_sum <- two_group_subset$Race_white + two_group_subset$Race_other + two_group_subset$Race_black + two_group_subset$Race_asian + 
+  two_group_subset$Race_amIndian + two_group_subset$Race_natHawaiian
+summary(as.factor(two_group_subset$race_sum))
+two_group_subset$race_binned <- ifelse(two_group_subset$race_sum >= 2, "Two or More Races", 
+                                       ifelse(two_group_subset$race_sum==0, "Prefer Not to Say", 
+                                              ifelse(two_group_subset$Race_white == 1, "White", 
+                                                     ifelse(two_group_subset$Race_black == 1, "Black", 
+                                                            ifelse(two_group_subset$Race_amIndian == 1, "American Indian", 
+                                                                   ifelse(two_group_subset$Race_asian == 1, "Asian", 
+                                                                          ifelse(two_group_subset$Race_natHawaiian ==1, "Native Hawaiian", "Other" 
+                                                                                 )))))))
+## Make sure we binned the data correctly
+summary(as.factor(two_group_subset$Race_notSay))
+
+## Save the race vectors
+race_binned_vec <- summary(as.factor(two_group_subset$race_binned))
+binned_race_percents <- race_binned_vec/2398
+
+race_binned_vec
+binned_race_percents
+```
+
+
+## AMCE for 4 Dependent Variables
+```{r All IVs as Factor Variables}
+#Monetary variables: engagement, media, hashtags
+two_group_subset$engagement <- factor(two_group_subset$engagement)
+summary(two_group_subset$engagement)
+levels(two_group_subset$engagement) <- c("low eng.", "medium eng.", "high eng.")
+summary(two_group_subset$engagement)
+
+two_group_subset$media <- factor(two_group_subset$media)
+summary(two_group_subset$media)
+levels(two_group_subset$media) <- c("no media", "media")
+summary(two_group_subset$media)
+
+two_group_subset$hashtags <- factor(two_group_subset$hashtags)
+summary(two_group_subset$hashtags)
+levels(two_group_subset$hashtags) <- c("no hashtag", "hashtag")
+summary(two_group_subset$hashtags)
+
+#Polarization variables: profile, party, content
+two_group_subset$profile <- factor(two_group_subset$profile)
+summary(two_group_subset$profile)
+levels(two_group_subset$profile) <- c("political elite", "journalist", "accountant", "plumber")
+summary(two_group_subset$profile)
+
+two_group_subset$party <- factor(two_group_subset$party)
+summary(two_group_subset$party)
+levels(two_group_subset$party) <- c("democrat", "republican")
+summary(two_group_subset$party)
+
+two_group_subset$content <- factor(two_group_subset$content)
+summary(two_group_subset$content)
+levels(two_group_subset$content) <- c("liberal", "conservative")
+summary(two_group_subset$content)
+```
+
+```{r Democrat and Republican Subsets}
+cleaned_dems_subset <- subset(two_group_subset, two_group_subset$party_3_scale == "Democrat")
+
+cleaned_reps_subset <- subset(two_group_subset, two_group_subset$party_3_scale == "Republican")
+```
+
+
+```{r Climate Policy Preference - General Policy}
+#### Calculate AMCE for General Policy #### 
+general_policy_amce <- cregg::amce(
+  two_group_subset,
+  ccGeneral_scale ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+general_policy_amce %>% as_tibble()
+
+## Make and view plot ## 
+plot(general_policy_amce) + 
+  guides(color = "none") +
+  labs(title = "General Policy Preference ~ Six Ind. Variables:: AMCE")
+
+## Name the plot ##
+general_policy_ind_vars_AMCE <- plot(general_policy_amce) + 
+  guides(color = "none") +
+  labs(title = "General Policy Preference ~ Six Ind. Variables:: AMCE")
+
+## Save the plot ##
+### png(filename="general_policy_ind_vars_AMCE.png")
+### plot(general_policy_ind_vars_AMCE)
+### dev.off()
+
+#### AMCE - General - Reps ####
+general_policy_amce_reps <- cregg::amce(
+  cleaned_reps_subset,
+  ccGeneral_scale ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+general_policy_amce_reps %>% as_tibble()
+
+## Make and view plot ## 
+plot(general_policy_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "General Policy Preference ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Name the plot ##
+general_policy_ind_vars_AMCE_reps <- plot(general_policy_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "General Policy Preference ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Save the plot ##
+### png(filename="general_policy_ind_vars_AMCE_reps.png")
+### plot(general_policy_ind_vars_AMCE_reps)
+### dev.off()
+
+
+#### AMCE - General - Dems ####
+general_policy_amce_dems <- cregg::amce(
+  cleaned_dems_subset,
+  ccGeneral_scale ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+general_policy_amce_dems %>% as_tibble()
+
+## Make and view plot ## 
+plot(general_policy_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "General Policy Preference ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Name the plot ##
+general_policy_ind_vars_AMCE_dems <- plot(general_policy_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "General Policy Preference ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Save the plot ##
+### png(filename="general_policy_ind_vars_AMCE_dems.png")
+### plot(general_policy_ind_vars_AMCE_dems)
+### dev.off()
+```
+
+
+```{r Climate Policy Preference - EV Policy}
+#### Calculate AMCE for EV Policy ####
+EV_policy_amce <- cregg::amce(
+  two_group_subset,
+  ccEVs_scale ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+EV_policy_amce %>% as_tibble()
+
+## Make and view plot ## 
+plot(EV_policy_amce) + 
+  guides(color = "none") +
+  labs(title = "EV Policy Preference ~ Six Ind. Variables:: AMCE")
+
+## Name the plot ##
+EV_policy_ind_vars_AMCE <- plot(EV_policy_amce) + 
+  guides(color = "none") +
+  labs(title = "EV Policy Preference ~ Six Ind. Variables:: AMCE")
+
+## Save the plot ##
+### png(filename="EV_policy_ind_vars_AMCE.png")
+### plot(EV_policy_ind_vars_AMCE)
+### dev.off()
+
+#### AMCE - EVs - Reps ####
+EV_policy_amce_reps <- cregg::amce(
+  cleaned_reps_subset,
+  ccEVs_scale ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+EV_policy_amce_reps %>% as_tibble()
+
+## Make and view plot ## 
+plot(EV_policy_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "EV Policy Preference ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Name the plot ##
+EV_policy_ind_vars_AMCE_reps <- plot(EV_policy_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "EV Policy Preference ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Save the plot ##
+### png(filename="EV_policy_ind_vars_AMCE_reps.png")
+### plot(EV_policy_ind_vars_AMCE_reps)
+### dev.off()
+
+#### AMCE - EVs - Dems ####
+EV_policy_amce_dems <- cregg::amce(
+  cleaned_dems_subset,
+  ccEVs_scale ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+EV_policy_amce_dems %>% as_tibble()
+
+## Make and view plot ## 
+plot(EV_policy_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "EV Policy Preference ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Name the plot ##
+EV_policy_ind_vars_AMCE_dems <- plot(EV_policy_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "EV Policy Preference ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Save the plot ##
+### png(filename="EV_policy_ind_vars_AMCE_dems.png")
+### plot(EV_policy_ind_vars_AMCE_dems)
+### dev.off()
+```
+
+
+```{r Thermometer Difference AMCE}
+###### AMCE (for whole sample) ######
+summary(two_group_subset$therm_diff)
+
+#### Calculate AMCE for Thermometer Difference ~ Six Ind. Variables
+therm_diff_amce <- cregg::amce(
+  two_group_subset,
+  therm_diff ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+therm_diff_amce %>% as_tibble()
+
+## Make and view plot ## 
+plot(therm_diff_amce) + 
+  guides(color = "none") +
+  labs(title = "Party Thermometer Difference ~ Six Ind. Variables:: AMCE - Overall")
+
+## Name the plot ##
+therm_diff_overall_AMCE <- plot(therm_diff_amce) + 
+  guides(color = "none") +
+  labs(title = "Party Thermometer Difference ~ Six Ind. Variables:: AMCE - Overall")
+
+## Save the plot ##
+### png(filename="therm_diff_overall_AMCE.png")
+### plot(therm_diff_overall_AMCE)
+### dev.off()
+
+
+###### AMCE - Democrats ######
+
+#### Calculate AMCE for Thermometer Difference ~ Six Ind. Variables
+therm_diff_amce_dems <- cregg::amce(
+  cleaned_dems_subset,
+  therm_diff ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+therm_diff_amce_dems %>% as_tibble()
+
+## Make and view plot ## 
+plot(therm_diff_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "Party Thermometer Difference ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Name the plot ##
+therm_diff_overall_AMCE_dems <- plot(therm_diff_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "Party Thermometer Difference ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Save the plot ##
+### png(filename="therm_diff_overall_AMCE_dems.png")
+### plot(therm_diff_overall_AMCE_dems)
+### dev.off()
+
+###### AMCE - Republicans ######
+
+#### Calculate AMCE for Thermometer Difference ~ Six Ind. Variables
+therm_diff_amce_reps <- cregg::amce(
+  cleaned_reps_subset,
+  therm_diff ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+therm_diff_amce_reps %>% as_tibble()
+
+## Make and view plot ## 
+plot(therm_diff_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "Party Thermometer Difference ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Name the plot ##
+therm_diff_overall_AMCE_reps <- plot(therm_diff_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "Party Thermometer Difference ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Save the plot ##
+### png(filename="therm_diff_overall_AMCE_reps.png")
+### plot(therm_diff_overall_AMCE_reps)
+### dev.off()
+```
+
+
+
+```{r Social Media Interactions AMCE}
+###### AMCE (for whole sample) ######
+summary(as.factor(two_group_subset$interact_binary))
+
+#### Calculate AMCE for Reported Interaction (Binary) ~ Six Ind. Variables
+interaction_amce <- cregg::amce(
+  two_group_subset,
+  interact_binary ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+interaction_amce %>% as_tibble()
+
+## Make and view plot ## 
+plot(interaction_amce) + 
+  guides(color = "none") +
+  labs(title = "Reported Interaction (Binary) ~ Six Ind. Variables:: AMCE - Overall")
+
+## Name the plot ##
+interaction_overall_AMCE <- plot(interaction_amce) + 
+  guides(color = "none") +
+  labs(title = "Reported Interaction (Binary) ~ Six Ind. Variables:: AMCE - Overall")
+
+## Save the plot ##
+### png(filename="interaction_overall_AMCE.png")
+### plot(interaction_overall_AMCE)
+### dev.off()
+
+
+###### AMCE - Democrats ######
+
+#### Calculate AMCE for Reported Interaction (Binary) ~ Six Ind. Variables
+interaction_amce_dems <- cregg::amce(
+  cleaned_dems_subset,
+  interact_binary ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+interaction_amce_dems %>% as_tibble()
+
+## Make and view plot ## 
+plot(interaction_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "Reported Interaction (Binary) ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Name the plot ##
+interaction_overall_AMCE_dems <- plot(interaction_amce_dems) + 
+  guides(color = "none") +
+  labs(title = "Reported Interaction (Binary) ~ Six Ind. Variables:: AMCE - Democrats")
+
+## Save the plot ##
+### png(filename="interaction_overall_AMCE_dems.png")
+### plot(interaction_overall_AMCE_dems)
+### dev.off()
+
+###### AMCE - Republicans ######
+
+#### Calculate AMCE for Reported Interaction (Binary) ~ Six Ind. Variables
+interaction_amce_reps <- cregg::amce(
+  cleaned_reps_subset,
+  interact_binary ~ party + profile + content +
+    engagement + media + hashtags,
+  id = ~0 ##unclustered standard errors (respondents did one task)
+)
+
+## Brief glance at model ## 
+interaction_amce_reps %>% as_tibble()
+
+## Make and view plot ## 
+plot(interaction_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "Reported Interaction (Binary) ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Name the plot ##
+interaction_overall_AMCE_reps <- plot(interaction_amce_reps) + 
+  guides(color = "none") +
+  labs(title = "Reported Interaction (Binary) ~ Six Ind. Variables:: AMCE - Republicans")
+
+## Save the plot ##
+### png(filename="interaction_overall_AMCE_reps.png")
+### plot(interaction_overall_AMCE_reps)
+### dev.off()
+```
+
+## Putting all three (overall/rep/dem) on the same graph
+
+### Estimated Interactions
+```{r Interactions One Plot}
+interactions_all_df <- as.data.frame(interaction_amce) %>%
+  mutate(Model = "Among Entire Sample")
+
+interactions_reps_df <- as.data.frame(interaction_amce_reps) %>%
+  mutate(Model = "Among Republicans")
+
+interactions_dems_df <- as.data.frame(interaction_amce_dems) %>%
+  mutate(Model = "Among Democrats")
+
+combined_df_interactions <- bind_rows(interactions_all_df, interactions_reps_df, interactions_dems_df)
+
+
+## Make combined plot for reported interactions
+interaction_overall_AMCE_combined <- ggplot(combined_df_interactions, aes(x = estimate, y = level, color = Model)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbarh(aes(xmin = lower, xmax = upper),
+                 position = position_dodge(width = 0.5),
+                 height = 0) +
+  #facet_wrap(~feature, scales = "free_y") +
+  scale_color_manual(values = c("blue", "gray", "red")) + 
+  xlab("AMCE Estimate") + ylab("Attribute Level") +
+  ggtitle("Reported Interaction with the Post (Binary): AMCE") + 
+  geom_vline(xintercept = 0) + 
+  theme_minimal()
+
+## png(filename="interaction_overall_AMCE_combined.png")
+## plot(interaction_overall_AMCE_combined)
+## dev.off()
+
+pdf(file = "Images/interaction_overall_AMCE_combined.pdf")
+plot(interaction_overall_AMCE_combined)
+dev.off()
+```
+
+### Thermometer Ratings
+```{r Thermometer Ratings One Plot}
+thermometer_all_df <- as.data.frame(therm_diff_amce) %>%
+  mutate(Model = "Among Entire Sample")
+
+thermometer_reps_df <- as.data.frame(therm_diff_amce_reps) %>%
+  mutate(Model = "Among Republicans")
+
+thermometer_dems_df <- as.data.frame(therm_diff_amce_dems) %>%
+  mutate(Model = "Among Democrats")
+
+combined_df_therm_diff <- bind_rows(thermometer_all_df, thermometer_reps_df, thermometer_dems_df)
+
+
+## Make combined plot for reported interactions
+thermometer_overall_AMCE_combined <- ggplot(combined_df_therm_diff, aes(x = estimate, y = level, color = Model)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbarh(aes(xmin = lower, xmax = upper),
+                 position = position_dodge(width = 0.5),
+                 height = 0) +
+  #facet_wrap(~feature, scales = "free_y") +
+  scale_color_manual(values = c("blue", "gray", "red")) + 
+  xlab("AMCE Estimate") + ylab("Attribute Level") +
+  ggtitle("Difference in Thermometer Ratings (Affective Polarization): AMCE") + 
+  geom_vline(xintercept = 0) + 
+  theme_minimal()
+
+## png(filename="thermometer_overall_AMCE_combined.png")
+## plot(thermometer_overall_AMCE_combined)
+## dev.off()
+
+pdf(file = "Images/thermometer_overall_AMCE_combined.pdf")
+plot(thermometer_overall_AMCE_combined)
+dev.off()
+```
+
+### General Policy AMCE
+```{r General Policy Preferences One Plot}
+general_policy_all_df <- as.data.frame(general_policy_amce) %>%
+  mutate(Model = "Among Entire Sample")
+
+general_policy_reps_df <- as.data.frame(general_policy_amce_reps) %>%
+  mutate(Model = "Among Republicans")
+
+general_policy_dems_df <- as.data.frame(general_policy_amce_dems) %>%
+  mutate(Model = "Among Democrats")
+
+combined_df_general_policy <- bind_rows(general_policy_all_df, general_policy_reps_df, general_policy_dems_df)
+
+
+## Make combined plot for reported interactions
+general_policy_AMCE_combined <- ggplot(combined_df_general_policy, aes(x = estimate, y = level, color = Model)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbarh(aes(xmin = lower, xmax = upper),
+                 position = position_dodge(width = 0.5),
+                 height = 0) +
+  #facet_wrap(~feature, scales = "free_y") +
+  scale_color_manual(values = c("blue", "gray", "red")) + 
+  xlab("AMCE Estimate") + ylab("Attribute Level") +
+  ggtitle("Support for Policy Regulating Greenhouse Emissions: AMCE") + 
+  geom_vline(xintercept = 0) + 
+  theme_minimal()
+
+## png(filename="general_policy_AMCE_combined.png")
+## plot(general_policy_AMCE_combined)
+## dev.off()
+
+pdf(file = "Images/general_policy_AMCE_combined.pdf")
+plot(general_policy_AMCE_combined)
+dev.off()
+```
+
+### EV Policy AMCE
+```{r EV Policy Preferences One Plot}
+EV_policy_all_df <- as.data.frame(EV_policy_amce) %>%
+  mutate(Model = "Among Entire Sample")
+
+EV_policy_reps_df <- as.data.frame(EV_policy_amce_reps) %>%
+  mutate(Model = "Among Republicans")
+
+EV_policy_dems_df <- as.data.frame(EV_policy_amce_dems) %>%
+  mutate(Model = "Among Democrats")
+
+combined_df_EV_policy <- bind_rows(EV_policy_all_df, EV_policy_reps_df, EV_policy_dems_df)
+
+## Make combined plot for reported interactions
+ev_policy_AMCE_combined <- ggplot(combined_df_EV_policy, aes(x = estimate, y = level, color = Model)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbarh(aes(xmin = lower, xmax = upper),
+                 position = position_dodge(width = 0.5),
+                 height = 0) +
+  #facet_wrap(~feature, scales = "free_y") +
+  scale_color_manual(values = c("blue", "gray", "red")) + 
+  xlab("AMCE Estimate") + ylab("AttributeLevel") +
+  ggtitle("Support for Policy Regulating Fuel Standards: AMCE") + 
+  geom_vline(xintercept = 0) + 
+  theme_minimal()
+
+## png(filename="ev_policy_AMCE_combined.png")
+## plot(ev_policy_AMCE_combined)
+## dev.off()
+
+pdf(file = "Images/ev_policy_AMCE_combined.pdf")
+plot(ev_policy_AMCE_combined)
+dev.off()
+
+```

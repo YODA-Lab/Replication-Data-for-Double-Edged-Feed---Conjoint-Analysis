@@ -1,0 +1,106 @@
+---
+title: "Data Anonymization"
+author: "Jean Springsteen"
+date: "2026-05-01"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(readxl)
+library(cregg)
+library(ggplot2)
+```
+
+## Data Upload
+
+This is uploading the entire, un-edited data file from the user survey.  Most data cleaning will be done in a separate document that will be entirely reproduceable. This script serves only to anonymize data from the survey participants. 
+```{r Full Survey Data Upload}
+survey_data <- read.csv("all_4_batch_data.csv")
+
+#To identify which columns have personal information
+colnames(survey_data)[1:55]
+```
+After column 51, "moneyDV1_1", the remaining column names are all dependent variable boolean indicators, and they are taken care of in the data cleaning document. To anonymize the data, we need to remove identifying data from columns, 4, 9, 10, 11, 12, 14, 15, and 19. Since the data analysis is already complete and uses the column numbers, I want to leave the structure of the dataframe in place and just change the data in the cells as opposed to removing the columns altogether. 
+
+## Anonymization
+
+```{r IP Address changes, echo=FALSE}
+# Ensure the IP Addresses are read as a string/character
+class(survey_data$IPAddress)
+
+# Drop the last four digits of the IP Address to grant anonymity
+#test <- substr(survey_data$IPAddress, 1, nchar(survey_data$IPAddress) - 4)
+survey_data$IPAddress <- substr(survey_data$IPAddress, 1, nchar(survey_data$IPAddress) - 4)
+
+# Make sure the dataset reflects these changes
+#head(survey_data$IPAddress, 25)
+```
+
+We can employ a similar strategy for the ResponseId. Since this is column is also classifies as a character, we can just drop the last five digits of the response id. As we check, this sill gives each participant a unique identifier without providing the entire string in our dataset. 
+
+```{r Response ID, echo=FALSE}
+# Ensure the ResponseId column is read as a string/character
+class(survey_data$ResponseId)  #Is a character
+
+# Drop the last five digits of the Response ID to grant anonymity
+survey_data$ResponseId <- substr(survey_data$ResponseId, 1, nchar(survey_data$ResponseId) - 5)
+
+# Make sure the dataset reflects these changes
+#head(survey_data$ResponseId, 25)
+
+# Ensure there is still uniqueness among response Id
+#summary(as.factor(survey_data$ResponseId))
+```
+
+Next is the last name, first name, and email address of the participants, corresponding to columns 10-12. Since we are not using names for our analysis, we replace all of this information with the response ID. 
+
+```{r Name and Email, echo=FALSE}
+# Column 10, last name
+survey_data$RecipientLastName <- survey_data$ResponseId
+### head(survey_data$RecipientLastName, 25)
+
+# Column 11, first name
+survey_data$RecipientFirstName <- survey_data$ResponseId
+### head(survey_data$RecipientFirstName, 25)
+
+# Column 12, email address
+survey_data$RecipientEmail <- survey_data$ResponseId
+### head(survey_data$RecipientEmail, 25)
+```
+
+For the location coordinates, it seems common to drop the decimals in the latitude and longitude coordinates, which we do below. This corresponds to columns 14 and 15 in the original data set. 
+
+```{r Latitude and Longitude, echo=FALSE}
+#Remove the decimal points
+survey_data$LocationLatitude <- round(as.numeric(survey_data$LocationLatitude, 0))
+survey_data$LocationLongitude <- round(as.numeric(survey_data$LocationLongitude, 0))
+
+### head(survey_data$LocationLatitude, 25)
+### head(survey_data$LocationLongitude, 25)
+```
+
+The final column to anonymize is the participant's Prolific ID (column 19). We again do this by truncating the string, taking the first 12 digits of the ID.
+
+```{r Prolific ID, echo=FALSE}
+# Ensure the ResponseId column is read as a string/character
+class(survey_data$proID)  #Is a character
+
+# Drop the last five digits of the Response ID to grant anonymity
+survey_data$proID <- substr(survey_data$ResponseId, 1, 12)
+
+# Make sure the dataset reflects these changes
+# head(survey_data$proID, 25)
+```
+
+## Write Data
+Now that all personally identifying information has been truncated/removed, we save this as a new data set. This will be the dataset provided in the public repository and used in the analysis. 
+
+```{r}
+write.csv(survey_data, file = "anonymized_survey_data.csv", row.names = FALSE)
+```
+

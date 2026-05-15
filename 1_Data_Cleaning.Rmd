@@ -1,0 +1,324 @@
+---
+title: "1 - Data Cleaning - Anonymized Survey Data"
+author: "Jean Springsteen"
+date: "2026"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(readxl)
+library(cregg)
+library(ggplot2)
+```
+
+```{r Load Data}
+batch_4_data0 <- read.csv("anonymized_survey_data.csv")
+summary(as.factor(batch_4_data0$Status))
+
+##Subset to only include prolific pilot data
+# batch_4_data <- subset(batch_4_data0, batch_4_data0$Status == "IP Address") ##changed after coded as values
+batch_4_data <- subset(batch_4_data0, batch_4_data0$Status == 0)
+
+summary(as.factor(batch_4_data$Progress)) ## Only include participants that completed the survey
+batch_4_data <- subset(batch_4_data, batch_4_data$Progress == 100)
+
+pilot_1_data <- batch_4_data[1:99,]
+pilot_2_data <- batch_4_data[100:600 ,]
+all_batch_data <- batch_4_data[601:3800 ,] #Gives us 800 x 4 = 3200 observations, as expected
+```
+
+This separates the 3,800 total responses into the categories they were collected. The first 100 submissions came from the first pilot. We added another survey question before running the second pilot, which collected 500 more responses. The survey remained unchanged once the final data collection began. The final 3,200 responses were collected in four batches. Prolific provides representative samples in survey sizes up to 800 participants. Each of the four batches is a representative sample and excluded participants from any previous iteration of the survey. 
+
+## Column Reduction
+
+In this dataset, there are 1,787 columns - most of these stem from the options in the conjoint experiment populating in their own columns. The first step is to create 8 dependent social media interaction variables from the 1,536 current columns measuring this. Each of the columns that begins with "moneyDV" indicates whether or not the participant responded that they would consider one of the types of interaction. Since each participant only saw one post in the experiment, we can condense these to 8 columns corresponding the 8 options for interactions. For these variables, the first number ranges between 1 and 192 indicating the post, and the second number (after the underscore) references each of the options from the survey. 
+
+```{r Column Inspection, results='hide'}
+colnames(all_batch_data)
+```
+
+The monetization dependent variables start in column 51 and end in column 1586. Specifically, these columns tell us which of the options in the \textit{select all} question about interactions with the post the survey respondent would consider. Since each post is separately included in Qualtrics, the variables are all separate as well. As a result, there are $192 \times 8 = 1,536$ columns of dependent variables. With how the data is structured, every eighth column corresponds to the same dependent variable. The code below condenses the 1,536 columns to 8 columns. 
+
+```{r Create 8 Interaction Dependent Variables}
+colnames(all_batch_data)[51]
+colnames(all_batch_data)[1586]
+
+#Create 8 different vectors indicating which of the columns correspond to each of the options and condensing from 192 versions to 1
+moneyDV_1_cols <- seq(from = 51, to = 1586, by = 8)
+moneyDV_2_cols <- seq(from = 52, to = 1586, by = 8)
+moneyDV_3_cols <- seq(from = 53, to = 1586, by = 8)
+moneyDV_4_cols <- seq(from = 54, to = 1586, by = 8)
+moneyDV_5_cols <- seq(from = 55, to = 1586, by = 8)
+moneyDV_6_cols <- seq(from = 56, to = 1586, by = 8)
+moneyDV_7_cols <- seq(from = 57, to = 1586, by = 8)
+moneyDV_8_cols <- seq(from = 58, to = 1586, by = 8)
+```
+
+
+```{r Finish Creating 8 DV Columns}
+mDV_cols <- colnames(all_batch_data)[51:1586]
+
+pd2 <- all_batch_data %>% mutate_at(mDV_cols, as.numeric)
+
+pd2$test_sum <- pd2$moneyDV1_3 + pd2$moneyDV168_3
+summary(pd2$test_sum) #Definitely looks like we need to turn NA to 0
+
+##Turn NA to 0 in columns in mDV_cols
+## I think we just need to create a separate df for these columns, instead of trying to operate within the df as a whole
+all_batch_data_mDVs <- pd2[, 51:1586]
+all_batch_data_mDVs[is.na(all_batch_data_mDVs)] <- 0
+
+moneyDV_1_cols <- seq(from = 1, to = 1536, by = 8)
+moneyDV_2_cols <- seq(from = 2, to = 1536, by = 8)
+moneyDV_3_cols <- seq(from = 3, to = 1536, by = 8)
+moneyDV_4_cols <- seq(from = 4, to = 1536, by = 8)
+moneyDV_5_cols <- seq(from = 5, to = 1536, by = 8)
+moneyDV_6_cols <- seq(from = 6, to = 1536, by = 8)
+moneyDV_7_cols <- seq(from = 7, to = 1536, by = 8)
+moneyDV_8_cols <- seq(from = 8, to = 1536, by = 8)
+
+moneyDV_1_combined <- rowSums(all_batch_data_mDVs[moneyDV_1_cols])
+moneyDV_2_combined <- rowSums(all_batch_data_mDVs[moneyDV_2_cols])
+moneyDV_3_combined <- rowSums(all_batch_data_mDVs[moneyDV_3_cols])
+moneyDV_4_combined <- rowSums(all_batch_data_mDVs[moneyDV_4_cols])
+moneyDV_5_combined <- rowSums(all_batch_data_mDVs[moneyDV_5_cols])
+moneyDV_6_combined <- rowSums(all_batch_data_mDVs[moneyDV_6_cols])
+moneyDV_7_combined <- rowSums(all_batch_data_mDVs[moneyDV_7_cols])
+moneyDV_8_combined <- rowSums(all_batch_data_mDVs[moneyDV_8_cols])
+
+moneyDVs_df <- cbind(moneyDV_1_combined, moneyDV_2_combined, moneyDV_3_combined, moneyDV_4_combined, moneyDV_5_combined, 
+                     moneyDV_6_combined, moneyDV_7_combined, moneyDV_8_combined)
+
+moneyDV_all_response <- rowSums(moneyDVs_df[,1:7])
+summary(moneyDV_all_response)
+
+moneyDVs_df <- cbind(moneyDVs_df, moneyDV_all_response)
+```
+
+
+Now, we can add our freshly cleaned data as columns in the dataset and remove the columns we no longer need. 
+
+```{r Add 8 DVs to Dataset}
+# First, we can remove the columns corresponding to the moneyDVs
+## colnames(all_batch_data)[1587]
+all_batch_data <- all_batch_data[-c(51:1586)]
+colnames(all_batch_data)
+
+# Then, we add the condensed monetization dependent variables back into the dataset
+batch_4_data <- cbind(all_batch_data, moneyDVs_df)
+```
+
+## Checking the Randomization Across Experiment
+
+```{r Check Randomization}
+#colnames(batch_4_data)
+colnames(batch_4_data)[60] #first randomization variable
+#Make sure we have all 192 options
+length(colnames(batch_4_data)[60:251])
+randomization_cols <- colnames(batch_4_data)[60:251]
+
+## colnames(batch_4_data)[60:251]
+
+#Make the entries numeric
+pd3 <- batch_4_data %>% mutate_at(randomization_cols, as.numeric)
+
+#Create a separate dataframe for the randomization columns
+randomization_check <- pd3[, 60:251]
+
+#Replace the NAs with 0 so we can sum
+randomization_check[is.na(randomization_check)] <- 0
+#. randomization_check$MonetizationDVs_DO_moneyDV1
+
+#Sum the columns. This will give us a 192-entry vector, telling us how many times each combination was chosen
+randomization_totals <- colSums(randomization_check)
+
+#Ensure there were 2999 instances
+# sum(batrandomization_totals)
+
+# Check randomization worked across the 192 options
+summary(randomization_totals)
+#colnames(batch_4_data)
+```
+This shows the descriptive statistics for how often each of the 192 post options were shown across the four batches of data collection. While not perfect randomization, no post was over- or under-represented once all data was collected. While the posts are fairly uniformly distributed, we will later verify that the individual levels of the attributes are also evenly distributed. 
+
+## Re-shape Data and Add DVs
+The next step is to turn the randomization columns into columns of dependent variables. 
+
+```{r Create Randomization Variable}
+#We only want to replace the 1s with the column names in the randomization columns. Doing this in the entire dataframe would be bad. 
+pilot_practice_rand <- all_batch_data[, 60:251]
+
+placeholder <- rep(0, length(pilot_practice_rand[, 1]))
+pilot_practice_rand <- cbind(placeholder, pilot_practice_rand)
+
+#Code from   https://stackoverflow.com/questions/52650425/how-do-i-replace-1s-in-data-frame-with-the-column-name
+pilot_practice_rand[-1] <- lapply(seq_along(pilot_practice_rand)[-1], function(x) ifelse(pilot_practice_rand[[x]] == 1, 
+                                                                                        names(pilot_practice_rand)[x], pilot_practice_rand[[x]]))
+#Remove placeholder column
+pilot_practice_rand$placeholder <- NULL
+
+# Remove the "MonetizationDVs_DO_moneyDV" from all of the columns, leaving only the combination number in the column
+pilot_practice_rand[] <- lapply(pilot_practice_rand, gsub, pattern='MonetizationDVs_DO_moneyDV', replacement='')
+
+#Make all the entries numeric
+all_rand_cols <- colnames(pilot_practice_rand)[1:192]
+pilot_practice_rand <- pilot_practice_rand %>% mutate_at(all_rand_cols, as.numeric)
+
+pilot_practice_rand[is.na(pilot_practice_rand)] <- 0
+
+#Entries in the columns are either 0 or the number corresponding to the combination, so creating a column
+  # that takes the maximum of this dataframe should give us the combination number
+pilot_practice_rand$Randomization_num <- apply(pilot_practice_rand,1,max)
+
+#pilot_practice_rand$Randomization_num
+
+## Test that everything looks okay 
+  ## (all numbers between 1 and 192 and relatively uniformly distributed)
+
+#max(pilot_practice_rand$Randomization_num)
+#min(pilot_practice_rand$Randomization_num)
+hist(pilot_practice_rand$Randomization_num, breaks = 193, main = "Frequency of Each Combination Appearing in Survey")
+```
+
+## Back to the original data set
+Now that we have a single column that gives us the combination that a participant saw, we return to the original dataframe. We can now remove the 192 randomization columns and replace it with the single column. 
+
+```{r Add Randomizaton Column Back Into Dataset}
+batch_4_data <- batch_4_data[, -60:-251]
+batch_4_data$Randomization <- pilot_practice_rand$Randomization_num
+colnames(batch_4_data)
+```
+
+Now that we have a single column telling us which randomization was selected, we can add the independent variables to the dataset. These are stored in a separate .csv file, but if we merge on the randomization column, the dataset will include the independent variables represented by the combination number.
+
+```{r Merge Independent Variables}
+#Read in the key for the randomization
+randomization_key <- read.csv("IV_combos_new.csv")
+randomization_key$Created. <- NULL
+
+colnames(randomization_key)[1] <- "Randomization"
+
+#Merge the two dataframes - should remain with 493 observations
+batch_data_4_with_IVs <- merge(batch_4_data, randomization_key, by = "Randomization", all.x = TRUE)
+```
+
+
+## Create variables for analysis
+```{r Create Thermometer Difference Variable}
+summary(as.numeric(batch_data_4_with_IVs$thermometerDems_1))
+summary(as.numeric(batch_data_4_with_IVs$thermometerReps_1))
+
+#Remove "haven't thought much about this" from the options and make sure the scale is numeric
+
+batch_data_4_with_IVs$party_affiliation_7_scale <- ifelse(batch_data_4_with_IVs$Party.Affiliation == 1, 
+                                                          ifelse(batch_data_4_with_IVs$party_repub == 1, 7, 6), 
+                                                          ifelse(batch_data_4_with_IVs$Party.Affiliation == 2, 
+                                                          ifelse(batch_data_4_with_IVs$party_dems == 1, 1, 2), 
+                                                          ifelse(batch_data_4_with_IVs$party_no_aff==3, 4, 
+                                                                 ifelse(batch_data_4_with_IVs$party_no_aff==2, 3, 5))))
+summary(as.factor(batch_data_4_with_IVs$party_affiliation_7_scale)) 
+
+#Party as Democrat/Republican/Independent (3 point scale instead of 7)
+batch_data_4_with_IVs$party_3_scale <- ifelse(batch_data_4_with_IVs$party_affiliation_7_scale < 4, "Democrat", 
+                                              ifelse(batch_data_4_with_IVs$party_affiliation_7_scale > 4, "Republican", "Independent"))
+
+## Same thing for Ideology
+#Turn it into a three point scale for liberal vs. conservative tests
+batch_data_4_with_IVs$ideology_3_scale <- ifelse(batch_data_4_with_IVs$Estimated.Ideology < 4, "Liberal", 
+                                              ifelse(batch_data_4_with_IVs$Estimated.Ideology > 4, "Conservative", "Moderate"))
+summary(as.factor(batch_data_4_with_IVs$ideology_3_scale))
+
+## In-party - out-party thermometer measure
+    ## We're taking out the moderates, so it doesn't matter which group they fall into here
+batch_data_4_with_IVs$therm_diff <- ifelse(batch_data_4_with_IVs$party_3_scale == "Democrat", 
+                                      as.numeric(batch_data_4_with_IVs$thermometerDems_1) - as.numeric(batch_data_4_with_IVs$thermometerReps_1), 
+                                      as.numeric(batch_data_4_with_IVs$thermometerReps_1) - as.numeric(batch_data_4_with_IVs$thermometerDems_1))
+```
+
+## Branching Likert Scale Variables to a Single Column
+```{r Likert Scale Variables}
+## Policy questions branch, so we need to create one column of this variable (should be moved to cleaning script)
+ ## Emission regulation questions are columns 55-57
+emissions_gen <- summary(as.numeric(batch_data_4_with_IVs$ccGeneral))#1,2,3 scale
+emissions_gen #Everyone answers; there are no NA
+
+emissions_gen_favor <- summary(as.numeric(batch_data_4_with_IVs$ccGeneral_favor)) #1,2,3 scale
+emissions_gen_favor
+
+emissions_gen_oppose <- summary(as.numeric(batch_data_4_with_IVs$ccGeneral_oppose)) #1,2,3 scale
+emissions_gen_oppose
+
+temp <- subset(batch_data_4_with_IVs, batch_data_4_with_IVs$ccGeneral == 2)
+#summary(as.numeric(temp$ccGeneral_oppose)) ## Double check that 2 == oppose from the data
+
+batch_data_4_with_IVs$ccGeneral_scale <- 
+  ifelse(batch_data_4_with_IVs$ccGeneral == 1, ifelse(batch_data_4_with_IVs$ccGeneral_favor == 1, 7, ifelse(batch_data_4_with_IVs$ccGeneral_favor == 2, 6, 5)), 
+         ifelse(batch_data_4_with_IVs$ccGeneral == 2, ifelse(batch_data_4_with_IVs$ccGeneral_oppose == 1, 1, ifelse(batch_data_4_with_IVs$ccGeneral_oppose == 2, 2, 3)), 4))
+
+summary(as.factor(batch_data_4_with_IVs$ccGeneral_scale))
+
+##Now we need to do the same for the EV question, which are columns 58 - 60
+EVs_gen <- summary(as.numeric(batch_data_4_with_IVs$ccEVs)) #1,2,3 scale
+EVs_gen #Everyone answers; there are no NA
+
+EVs_gen_favor <- summary(as.numeric(batch_data_4_with_IVs$ccEVs_favor)) #1,2,3 scale
+EVs_gen_favor
+
+EVs_gen_oppose <- summary(as.numeric(batch_data_4_with_IVs$ccEVs_oppose)) #1,2,3 scale
+EVs_gen_oppose
+
+temp <- subset(batch_data_4_with_IVs, batch_data_4_with_IVs$ccEVs == 2)
+#summary(temp$ccEVs_oppose) ## Double check that 2 == oppose from the data
+
+batch_data_4_with_IVs$ccEVs_scale <- 
+  ifelse(batch_data_4_with_IVs$ccEVs == 1, ifelse(batch_data_4_with_IVs$ccEVs_favor == 1, 7, ifelse(batch_data_4_with_IVs$ccEVs_favor == 2, 6, 5)), 
+         ifelse(batch_data_4_with_IVs$ccEVs == 2, ifelse(batch_data_4_with_IVs$ccEVs_oppose == 1, 1, ifelse(batch_data_4_with_IVs$ccEVs_oppose == 2, 2, 3)), 4))
+
+summary(as.factor(batch_data_4_with_IVs$ccEVs_scale))
+```
+
+## Any other columns that need cleaned?
+```{r Re-name misc. columns}
+colnames(batch_data_4_with_IVs)
+
+#May want to clean the select all of Race and Media Platforms Used
+#First, we'll rename the variables of the media platforms visited
+colnames(batch_data_4_with_IVs)[41] <- "Media.Platforms.Used_Facebook"
+colnames(batch_data_4_with_IVs)[42] <- "Media.Platforms.Used_Twitter"
+colnames(batch_data_4_with_IVs)[43] <- "Media.Platforms.Used_Instagram"
+colnames(batch_data_4_with_IVs)[44] <- "Media.Platforms.Used_Reddit"
+colnames(batch_data_4_with_IVs)[45] <- "Media.Platforms.Used_YouTube"
+colnames(batch_data_4_with_IVs)[46] <- "Media.Platforms.Used_Snapchat"
+colnames(batch_data_4_with_IVs)[47] <- "Media.Platforms.Used_TikTok"
+colnames(batch_data_4_with_IVs)[48] <- "Media.Platforms.Used_Other"
+colnames(batch_data_4_with_IVs)[49] <- "Media.Platforms.Used_None"
+
+#A quick check
+## summary(as.factor(batch_data_4_with_IVs$Media.Platforms.Used_Snapchat))
+
+#Change the Race variables
+colnames(batch_data_4_with_IVs)[32] <- "Race_white"
+colnames(batch_data_4_with_IVs)[33] <- "Race_black"
+colnames(batch_data_4_with_IVs)[34] <- "Race_amIndian"
+colnames(batch_data_4_with_IVs)[35] <- "Race_asian"
+colnames(batch_data_4_with_IVs)[36] <- "Race_natHawaiian"
+colnames(batch_data_4_with_IVs)[37] <- "Race_other"
+colnames(batch_data_4_with_IVs)[38] <- "Race_notSay"
+
+#A quick check
+## summary(as.factor(batch_data_4_with_IVs$Race_white))
+
+
+## Only People who agreed to the survey
+batch_data_4_with_IVs <- subset(batch_data_4_with_IVs, batch_data_4_with_IVs$Agreement == 1)
+```
+
+## Write (cleaned) data set
+```{r Write Data Set}
+write.csv(batch_data_4_with_IVs, "cleaned_anonymized_survey_data.csv", row.names = FALSE)
+```
+
